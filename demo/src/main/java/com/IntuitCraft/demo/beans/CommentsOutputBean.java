@@ -27,9 +27,15 @@ import lombok.NoArgsConstructor;
 //Post pe jb first level comments honge to parent comment id null rahega,postId hogi,postId compulsory
 //in every API for Comments controller
 
+//CAache redis ka LRU use krunga with  eviction handling
+
 //Rate Limit,configured at CMS
 
 //User can perform writes only if user is authenticated,like post & comment & reply
+
+//million users like/dislike and request of same user goes to diff microservices
+//to kafka connect use kr k CDC(change data capture) use kr skte hain jo db me direct entry karega
+//and event store se kafka connect kafka me push kr dega and waha consume kr lete hain
 
 
 @Data
@@ -37,8 +43,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class CommentsOutputBean implements Serializable {
-
-
         private Long id;
         private Long postId;
         private String userId;
@@ -46,12 +50,10 @@ public class CommentsOutputBean implements Serializable {
         private String content;
         private int likesCount;
         private int dislikesCount;
-
     public CommentsOutputBean(Long id, Long postId, String content) {
         this.id=id;
         this.postId=postId;
         this.content=content;
     }
 
-    // Getters and setters
 }

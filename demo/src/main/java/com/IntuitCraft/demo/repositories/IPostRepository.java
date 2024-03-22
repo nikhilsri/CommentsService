@@ -8,7 +8,7 @@ import java.time.LocalDate;
 
 public interface IPostRepository {
         void save(Post post);
-        Post getPostByPostId(Long postId);
+        Post findPostById(Long postId);
 
         Page<Post> getPostByDateAdded(LocalDate date, Pageable pageable);
 }

@@ -5,12 +5,15 @@ import com.IntuitCraft.demo.beans.CommonKafkaBaseBean;
 import com.IntuitCraft.demo.beans.PostRequest;
 import com.IntuitCraft.demo.exceptions.PostsException;
 import com.IntuitCraft.demo.repositories.IPostRepository;
+import com.IntuitCraft.demo.utils.CommentsServiceConstants;
 import com.IntuitCraft.demo.utils.enums.EventName;
 import com.IntuitCraft.demo.utils.enums.EventType;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.commons.lang3.ObjectUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -33,27 +36,36 @@ public class PostService {
     }
 
     public Post addPost(PostRequest postRequest) {
-        Post post = new Post();
-        post.setTitle(postRequest.getTitle());
-        post.setContent(postRequest.getContent());
-        post.setUserId(postRequest.getUserId());
-        String postData="";
-        ObjectMapper mapper=new ObjectMapper();
+        if(ObjectUtils.isEmpty(postRequest)||ObjectUtils.isEmpty(postRequest.getUserId())){
+            throw PostsException.POST_BAD_REQUEST;
+        }
+        Post post = new Post(postRequest.getTitle(), postRequest.getContent(), postRequest.getUserId());
+        String postData = "";
+        ObjectMapper mapper = new ObjectMapper();
         try {
-            postData=mapper.writeValueAsString(post);
+            postData = mapper.writeValueAsString(post);
         } catch (JsonProcessingException e) {
             throw PostsException.POST_NOT_ADDED;
         }
-        // Set any other fields as needed
-        CommonKafkaBaseBean commonKafkaBaseBean =new CommonKafkaBaseBean(EventName.ADD_POST.name(),postData,LocalDate.now(), EventType.POST.name());
+
+        CommonKafkaBaseBean commonKafkaBaseBean = new CommonKafkaBaseBean(EventName.ADD_POST.name(), postData, LocalDate.now(), EventType.POST.name());
         kafkaProducer.sendToKafka(postsTopic, commonKafkaBaseBean);
         return post;
     }
 
-    public Page<Post> getPostsByDate(LocalDate date, int pageSize) {
-
+    @Cacheable(value = "postCache",key = "#postId",unless = "#result == null" )
+    public Post findPostById(Long postId){
+        if(ObjectUtils.isEmpty(postId))
+            throw PostsException.POST_BAD_REQUEST;
+        Post post= postRepository.findPostById(postId);
+        if(ObjectUtils.isEmpty(post)){
+            throw PostsException.POST_NOT_FOUND;
+        }
+        return post;
+    }
+    public Page<Post> getPostsByDate(LocalDate date, int pageNumber) {
         //caching krni hai ??
-        return postRepository.getPostByDateAdded(date, PageRequest.of(0, pageSize));
+        return postRepository.getPostByDateAdded(date, PageRequest.of( pageNumber, CommentsServiceConstants.FETCH_SIZE));
     }
 }
 

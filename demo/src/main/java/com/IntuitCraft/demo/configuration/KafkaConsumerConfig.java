@@ -30,6 +30,12 @@ public class KafkaConsumerConfig {
 
     @Value(value = "${comments.topic}")
     public String COMMENTS_TOPIC;
+    @Value(value = "${posts.topic}")
+    public String POSTS_TOPIC;
+
+    @Value(value = "${votes.topic}")
+    public String VOTES_TOPIC;
+
 
     public KafkaConsumerConfig() {
     }
@@ -45,6 +51,10 @@ public class KafkaConsumerConfig {
         Map<Pattern, Deserializer<?>> topicVsDeserializers = new HashMap<Pattern, Deserializer<?>>();
 
         topicVsDeserializers.put(Pattern.compile(COMMENTS_TOPIC),
+                new JsonDeserializer<>(CommonKafkaBaseBean.class));
+        topicVsDeserializers.put(Pattern.compile(POSTS_TOPIC),
+                new JsonDeserializer<>(CommonKafkaBaseBean.class));
+        topicVsDeserializers.put(Pattern.compile(VOTES_TOPIC),
                 new JsonDeserializer<>(CommonKafkaBaseBean.class));
 
         return new DefaultKafkaConsumerFactory<>(props, new StringDeserializer(),

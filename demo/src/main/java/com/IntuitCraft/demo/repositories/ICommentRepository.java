@@ -23,6 +23,10 @@ public interface ICommentRepository {
 
     public void updateCommentDislikes(Long commentId, int newDislikes);
     void updateComment(Comment comment);
+
+    public void deleteCommentById(Long commentId);
+
+    Comment findCommentsByIdAndUserId(Long commentId,String userId);
 }
 
 

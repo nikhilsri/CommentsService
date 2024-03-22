@@ -47,4 +47,8 @@ public class CommonResponse<R> implements Serializable {
         this.response = response;
     }
 
+    public CommonResponse(Integer httpCode, R response) {
+        this.httpCode = httpCode;
+        this.response = response;
+    }
 }
