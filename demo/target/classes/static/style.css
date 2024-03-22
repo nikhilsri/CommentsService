@@ -1,0 +1,12 @@
+body {
+  font-family: sans-serif;
+}
+
+h1 {
+  margin-bottom: 2rem;
+}
+
+.post {
+  border-bottom: 1px solid #ddd;
+  padding-bottom: 1rem;
+}
