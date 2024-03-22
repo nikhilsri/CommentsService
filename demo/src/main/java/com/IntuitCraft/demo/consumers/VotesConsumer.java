@@ -6,14 +6,15 @@ import com.IntuitCraft.demo.Entities.Likes;
 import com.IntuitCraft.demo.beans.CommonKafkaBaseBean;
 import com.IntuitCraft.demo.repositories.ICommentRepository;
 import com.IntuitCraft.demo.repositories.IVoteRepository;
+import com.IntuitCraft.demo.service.CommentService;
 import com.IntuitCraft.demo.utils.CommentsServiceConstants;
 import com.IntuitCraft.demo.utils.VotesConstants;
 import com.IntuitCraft.demo.utils.enums.EventName;
-import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.commons.lang3.ObjectUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.KafkaHeaders;
 import org.springframework.messaging.handler.annotation.Header;
@@ -31,6 +32,9 @@ public class VotesConsumer {
 
 
     private final ICommentRepository commentRepository;
+
+    @Autowired
+    CommentService commentService;
 
     public VotesConsumer(IVoteRepository voteRepository, ICommentRepository commentRepository) {
         this.voteRepository = voteRepository;
@@ -62,15 +66,15 @@ public class VotesConsumer {
             if(ObjectUtils.isNotEmpty(votes)) {
 
                 userId=votes.containsKey(CommentsServiceConstants.USERID)?getUserId(mapper,votes):"";
-
+                Comment comment = null;
                 if (EventName.LIKE.name().equals(votesEventMessage.getEventName())) {
-                    Comment comment = null;
+
                     Dislikes dislikes = null;
                     if (votes.containsKey(CommentsServiceConstants.COMMENTS)) {
                         comment = getComment(mapper, votes);
                     }
                     if (votes.containsKey(VotesConstants.DISLIKES)) {
-                        dislikes = getVotes(mapper, votes, VotesConstants.DISLIKE, Dislikes.class);
+                        dislikes = getVotes(mapper, votes, VotesConstants.DISLIKE, Dislikes.class,userId);
                     }
                     if (ObjectUtils.isNotEmpty(dislikes)) {
 
@@ -98,14 +102,13 @@ public class VotesConsumer {
                     }
 
                 } else {
-                    Comment comment = null;
                     Likes likes = null;
                     boolean removeLikeIfAlreadyDislikedBySameUserAndComment = false;
                     if (votes.containsKey(CommentsServiceConstants.COMMENTS)) {
                         comment = getComment(mapper, votes);
                     }
                     if (votes.containsKey(VotesConstants.LIKES)) {
-                        likes = getVotes(mapper, votes, VotesConstants.LIKE, Likes.class);
+                        likes = getVotes(mapper, votes, VotesConstants.LIKE, Likes.class,userId);
                     }
                     if (ObjectUtils.isNotEmpty(likes)) {
                         //user already liked the same comment and now he is trying to dislike it
@@ -137,25 +140,26 @@ public class VotesConsumer {
         }
     }
 
-    private static <T> T getVotes(ObjectMapper mapper, Map<String, Object> votes,String voteType,Class<T> responseType) throws JsonProcessingException {
+    private  <T> T getVotes(ObjectMapper mapper, Map<String, Object> votes,String voteType,Class<T> responseType,String userId) throws JsonProcessingException {
+        Comment comment=getComment(mapper,votes);
         if (VotesConstants.LIKE.equals(voteType)) {
-            LinkedHashMap<String, Object> likesMap = (LinkedHashMap<String, Object>) votes.get(VotesConstants.LIKES);
-            String likesJson = mapper.writeValueAsString(likesMap);
-            return mapper.readValue(likesJson, responseType);
+            return (T) voteRepository.findLikesByCommentIdAndUserId(comment.getId(),userId);
         } else {
-            LinkedHashMap<String, Object> dislikesMap = (LinkedHashMap<String, Object>) votes.get(VotesConstants.DISLIKES);
-            String dislikesJson = mapper.writeValueAsString(dislikesMap);
-            return mapper.readValue(dislikesJson, responseType);
+            /*LinkedHashMap<String, Object> dislikesMap = (LinkedHashMap<String, Object>) votes.get(VotesConstants.DISLIKES);
+            String dislikesJson = mapper.writeValueAsString(dislikesMap);*/
+            //return mapper.readValue(dislikesJson, responseType);
+            return (T) voteRepository.findDislikesByCommentIDAndUserId(comment.getId(),userId);
         }
     }
 
-    private static Comment getComment(ObjectMapper mapper, Map<String, Object> votes) throws JsonProcessingException {
-        Comment comment;
-        LinkedHashMap<String, Object> commentMap = (LinkedHashMap<String, Object>) votes.get(CommentsServiceConstants.COMMENTS);
-        String commentJson = mapper.writeValueAsString(commentMap);
-        comment= mapper.readValue(commentJson,
-                new TypeReference<Comment>() {
-                });
+    private Comment getComment(ObjectMapper mapper, Map<String, Object> votes) throws JsonProcessingException {
+
+        Integer commentId = (Integer) votes.get(CommentsServiceConstants.COMMENTS);
+       /* String commentJson = mapper.writeValueAsString(commentMap);
+        commentId= mapper.readValue(commentJson,
+                new TypeReference<Long>() {
+                });*/
+        Comment comment = commentRepository.findByCommentId(Long.valueOf(commentId));
         return comment;
     }
 

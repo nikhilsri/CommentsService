@@ -12,6 +12,7 @@ import javax.sql.DataSource;
 import com.IntuitCraft.demo.Entities.Comment;
 import com.IntuitCraft.demo.repositories.ICommentRepository;
 import org.apache.commons.lang3.ObjectUtils;
+import org.jdbi.v3.core.Handle;
 import org.jdbi.v3.core.Jdbi;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -41,47 +42,29 @@ public class CommentRepositoryImpl implements ICommentRepository {
 
     @Override
     public Page<Comment> findFirstLevelCommentsByPostId(Long postId, Pageable pageable) {
+        String selectSql = "SELECT * FROM comments WHERE post_id = :postId AND parent_id IS NULL order by date_added desc LIMIT :limit OFFSET :offset";
+        String countSql = "SELECT COUNT(*) FROM comments WHERE post_id = :postId AND parent_id IS NULL";
+
         List<Comment> comments = new ArrayList<>();
-        long totalComments = 0;
+        long[] totalComments = new long[1];
 
-        String selectSql = "SELECT * FROM comments WHERE post_id = ? AND parent_id IS NULL LIMIT ? OFFSET ?";
-        String countSql = "SELECT COUNT(*) FROM comments WHERE post_id = ? AND parent_id IS NULL";
-
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement selectStmt = conn.prepareStatement(selectSql);
-             PreparedStatement countStmt = conn.prepareStatement(countSql)) {
-
-            // Set parameters for the select query
-            selectStmt.setLong(1, postId);
-            selectStmt.setInt(2, pageable.getPageSize());
-            selectStmt.setInt(3, (int) pageable.getOffset());
-
+        jdbi.useHandle(handle -> {
             // Execute the select query
-            try (ResultSet rs = selectStmt.executeQuery()) {
-                while (rs.next()) {
-                    Comment comment = new Comment();
-                    comment.setId(rs.getLong("id"));
-                    comment.setPostId(rs.getLong("post_id"));
-                    comment.setParent(rs.getLong("parent_id"));
-                    comment.setUserId(rs.getString("user_id"));
-                    comment.setContent(rs.getString("content"));
-                    comments.add(comment);
-                }
-            }
+            handle.createQuery(selectSql)
+                    .bind("postId", postId)
+                    .bind("limit", pageable.getPageSize())
+                    .bind("offset", pageable.getOffset())
+                    .mapToBean(Comment.class)
+                    .forEach(comments::add);
 
             // Execute the count query
-            countStmt.setLong(1, postId);
-            try (ResultSet countRs = countStmt.executeQuery()) {
-                if (countRs.next()) {
-                    totalComments = countRs.getLong(1);
-                }
-            }
-        } catch (SQLException ex) {
-            // Handle exceptions
-            ex.printStackTrace();
-        }
+            totalComments[0] = handle.createQuery(countSql)
+                    .bind("postId", postId)
+                    .mapTo(Long.class)
+                    .findOnly();
+        });
 
-        return new PageImpl<>(comments, pageable, totalComments);
+        return new PageImpl<>(comments, pageable, totalComments[0]);
     }
 
     public long countFirstLevelCommentsByPostId(Long postId) {
@@ -98,8 +81,8 @@ public class CommentRepositoryImpl implements ICommentRepository {
              PreparedStatement preparedStatement = connection.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS)) {
             preparedStatement.setLong(1, comment.getPostId());
 
-            if(ObjectUtils.isNotEmpty(comment.getParent())){
-                Long parentId=comment.getParent();
+            if(ObjectUtils.isNotEmpty(comment.getParentId())){
+                Long parentId=comment.getParentId();
                 preparedStatement.setLong(2, parentId);
             }else {
                 preparedStatement.setNull(2, Types.BIGINT);
@@ -136,7 +119,7 @@ public class CommentRepositoryImpl implements ICommentRepository {
                     Comment comment = new Comment();
                     comment.setId(resultSet.getLong("id"));
                     comment.setPostId(resultSet.getLong("post_id"));
-                    comment.setParent(resultSet.getLong("parent_id"));
+                    comment.setParentId(resultSet.getLong("parent_id"));
                     comment.setUserId(resultSet.getString("user_id")); // Change type to String
                     comment.setContent(resultSet.getString("content"));
                     comment.setLikesCount(resultSet.getInt("likes_count"));
@@ -183,7 +166,7 @@ public class CommentRepositoryImpl implements ICommentRepository {
                     Comment comment = new Comment();
                     comment.setId(resultSet.getLong("id"));
                     comment.setPostId(resultSet.getLong("post_id"));
-                    comment.setParent(resultSet.getLong("parent_id"));
+                    comment.setParentId(resultSet.getLong("parent_id"));
                     comment.setUserId(resultSet.getString("user_id")); // Change type to String
                     comment.setContent(resultSet.getString("content"));
                     comment.setLikesCount(resultSet.getInt("likes_count"));
@@ -204,37 +187,24 @@ public class CommentRepositoryImpl implements ICommentRepository {
         List<Comment> comments = new ArrayList<>();
         int totalComments = 0;
 
-        String countSql = "SELECT COUNT(*) FROM comments WHERE parent_id = ?";
-        String selectSql = "SELECT * FROM comments WHERE parent_id = ? LIMIT ? OFFSET ?";
+        String countSql = "SELECT COUNT(*) FROM comments WHERE parent_id = :parentId";
+        String selectSql = "SELECT * FROM comments WHERE parent_id = :parentId order by date_added desc LIMIT :limit OFFSET :offset";
 
-        try (Connection conn = dataSource.getConnection();
-             PreparedStatement countStmt = conn.prepareStatement(countSql);
-             PreparedStatement selectStmt = conn.prepareStatement(selectSql)) {
-
+        try (Handle handle = jdbi.open()) {
             // Calculate total number of comments
-            countStmt.setLong(1, parentId);
-            try (ResultSet countRs = countStmt.executeQuery()) {
-                if (countRs.next()) {
-                    totalComments +=1;
-                }
-            }
+            totalComments = handle.createQuery(countSql)
+                    .bind("parentId", parentId)
+                    .mapTo(Integer.class)
+                    .one();
 
             // Retrieve comments for the specified page
-            selectStmt.setLong(1, parentId);
-            selectStmt.setInt(2, pageable.getPageSize());
-            selectStmt.setInt(3, (int) pageable.getOffset());
-            try (ResultSet rs = selectStmt.executeQuery()) {
-                while (rs.next()) {
-                    Comment comment = new Comment();
-                    comment.setId(rs.getLong("id"));
-                    comment.setPostId(rs.getLong("post_id"));
-                    comment.setParent(rs.getLong("parent_id"));
-                    comment.setUserId(rs.getString("user_id"));
-                    comment.setContent(rs.getString("content"));
-                    comments.add(comment);
-                }
-            }
-        } catch (SQLException ex) {
+            comments = handle.createQuery(selectSql)
+                    .bind("parentId", parentId)
+                    .bind("limit", pageable.getPageSize())
+                    .bind("offset", pageable.getOffset())
+                    .mapToBean(Comment.class)
+                    .list();
+        } catch (Exception ex) {
             // Handle exceptions
             ex.printStackTrace();
         }
@@ -242,13 +212,54 @@ public class CommentRepositoryImpl implements ICommentRepository {
         return new PageImpl<>(comments, pageable, totalComments);
     }
 
+
+    @Override
+    public void deleteCommentById(Long commentId){
+        String sql = "DELETE FROM comments WHERE id = :commentId";
+
+        try (Handle handle = jdbi.open()) {
+            handle.createUpdate(sql)
+                    .bind("commentId", commentId)
+                    .execute();
+        } catch (Exception e) {
+            // Handle any exceptions
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    public Comment findCommentsByIdAndUserId(Long commentId, String userId) {
+        String sql = "SELECT * FROM comments WHERE id = :commentId AND user_id = :userId";
+        Comment comment = null;
+        try (Handle handle = jdbi.open()) {
+            comment= handle.createQuery(sql)
+                    .bind("commentId", commentId)
+                    .bind("userId", userId)
+                    .mapToBean(Comment.class)
+                    .findFirst().orElse(null);
+        } catch (Exception e) {
+            // Handle any exceptions
+            e.printStackTrace();
+
+        }
+        return comment;
+    }
+
     @Override
     public Comment findByCommentId(Long commentId) {
-        String jpql = "SELECT c FROM Comment c WHERE c.id = :commentId";
-        TypedQuery<Comment> query = entityManager.createQuery(jpql, Comment.class)
-                .setParameter("commentId", commentId)
-                .setMaxResults(1); // Limit the result to one
-        return query.getResultList().isEmpty() ? null : query.getResultList().get(0);
+        String sql = "SELECT * FROM comments WHERE id = :commentId LIMIT 1";
+
+        try (Handle handle = jdbi.open()) {
+            return handle.createQuery(sql)
+                    .bind("commentId", commentId)
+                    .mapToBean(Comment.class)
+                    .findFirst()
+                    .orElse(null);
+        } catch (Exception e) {
+            e.printStackTrace();
+            // Handle exception
+            return null;
+        }
     }
 
     @Override
@@ -281,7 +292,7 @@ public class CommentRepositoryImpl implements ICommentRepository {
             sql.append(first ? "" : ", ").append("user_id = :userId");
             first = false;
         }
-        if (comment.getParent() != null) {
+        if (comment.getParentId() != null) {
             sql.append(first ? "" : ", ").append("parent_id = :parent");
             first = false;
         }

@@ -6,18 +6,16 @@ import com.IntuitCraft.demo.repositories.IVoteRepository;
 import org.jdbi.v3.core.Jdbi;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 import javax.sql.DataSource;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
+import java.util.List;
 
 @Repository
 public class VoteRepositoryImpl implements IVoteRepository {
-
-    @Autowired
-    private DataSource dataSource;
 
     private final Jdbi jdbi;
 
@@ -58,6 +56,30 @@ public class VoteRepositoryImpl implements IVoteRepository {
                 .bind("userId", userId)
                 .bind("commentId", commentId)
                 .execute());
+    }
+
+    @Override
+    public Page<String> findUserIdsForVoteByCommentId(Long commentId, String tableName, Pageable pageable) {
+        String sql="select user_id from " +tableName+ " where comment_id = :commentId order by timestamp desc";
+        List<String> allUserIds = jdbi.withHandle(handle ->
+                handle.createQuery(sql)
+                        .bind("commentId", commentId)
+                        .mapTo(String.class)
+                        .list()
+        );
+
+        // Calculate pagination parameters
+        int pageSize = pageable.getPageSize();
+        int pageNumber = pageable.getPageNumber();
+        int fromIndex = pageNumber * pageSize;
+        int toIndex = Math.min(fromIndex + pageSize, allUserIds.size());
+
+        // Get the sublist for the current page
+        List<String> userIDsForPage = allUserIds.subList(fromIndex, toIndex);
+
+        // Create and return the Page object
+        return new PageImpl<>(userIDsForPage, pageable, allUserIds.size());
+
     }
 
     @Override

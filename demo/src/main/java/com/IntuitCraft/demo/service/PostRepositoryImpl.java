@@ -21,9 +21,6 @@ import java.util.List;
 
 @Repository
 public class PostRepositoryImpl implements IPostRepository {
-
-    @Autowired
-    private DataSource dataSource;
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
@@ -52,17 +49,13 @@ public class PostRepositoryImpl implements IPostRepository {
     }
 
     @Override
-    public Post getPostByPostId(Long postId) {
-        String sql = "SELECT * FROM posts WHERE id = ?";
-        return jdbcTemplate.queryForObject(sql, new Object[]{postId}, (rs, rowNum) -> {
-            Post post = new Post();
-            post.setId(rs.getLong("id"));
-            post.setTitle(rs.getString("title"));
-            post.setContent(rs.getString("content"));
-            post.setUserId(rs.getString("user_id"));
-            // Set other properties as needed
-            return post;
-        });
+    public Post findPostById(Long postId) {
+        return jdbi.withHandle(handle ->
+                handle.createQuery("SELECT * FROM posts WHERE id = :id")
+                        .bind("id", postId)
+                        .mapToBean(Post.class)
+                        .findFirst().orElse(null)
+        );
     }
 
     @Override
