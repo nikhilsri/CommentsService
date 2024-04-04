@@ -14,9 +14,6 @@ dislikes. One clicking on the likes or dislikes the list of the users participat
 like/dislike shall be displayed
 
  
-
-Open Screenshot 2024-03-16 at 3.02.37 PM.png
-Screenshot 2024-03-16 at 3.02.37 PM.png
 a) Design a basic service which can add comments, likes, dislikes to a social media
 post, replies to a comment, replies to replies and associated likes or dislikes.
 There should be a get api to satisfy the requirements.
